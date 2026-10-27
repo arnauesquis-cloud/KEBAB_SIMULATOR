@@ -1,0 +1,10 @@
+Scene: Assets/Kebab/Scenes/Restaurant.unity
+Unity: 6000.3.24f1
+Footprint: 12 x 10.5 m = 126 m2
+Dining: 6 tables / 24 chairs
+Mesh renderers: 925
+Scene triangles: 78262
+Missing scripts: 0
+Lightmap textures: 2
+Android module: False
+Quest headset test: PENDING (physical hardware required)

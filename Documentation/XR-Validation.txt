@@ -1,0 +1,9 @@
+Android loader=True, stereo=SinglePassInstanced
+Enabled: MetaQuestFeature, MetaQuestTouchPlusControllerProfile, OculusTouchControllerProfile
+Standalone loader=True, stereo=SinglePassInstanced
+Enabled: MetaQuestTouchPlusControllerProfile, OculusTouchControllerProfile
+Missing scripts=0
+Spawn obstacles=0
+Android Build Support installed=False
+Hardware tracking and performance: NOT TESTED; headset required.
+Validation errors=0
