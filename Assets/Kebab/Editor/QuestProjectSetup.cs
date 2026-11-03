@@ -87,16 +87,18 @@ namespace Brasa.Editor
         }
         public static void CreateRig()
         {
-            var rig=Group("XR Origin · Quest 3 · nomes tracking",null,new(0,0,-3.8f));
+            var rig=Group("XR Origin · Quest 3 · teleport",null,new(0,0,-3.8f));
             var offset=Group("Camera Offset",rig);
             var cameraObject=Group("Main Camera",offset,new(0,1.65f,0)).gameObject;cameraObject.tag="MainCamera";
             var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=60;camera.fieldOfView=78;
             camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=Hex("#A8B9BC");cameraObject.AddComponent<AudioListener>();camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
             Track(cameraObject,"<XRHMD>/centerEyePosition","<XRHMD>/centerEyeRotation","<XRHMD>/trackingState");
             var origin=rig.gameObject.AddComponent<XROrigin>();origin.Camera=camera;origin.CameraFloorOffsetObject=offset.gameObject;origin.CameraYOffset=1.65f;origin.RequestedTrackingOriginMode=XROrigin.TrackingOriginMode.Floor;
+            Transform leftHand=null,rightHand=null;
             foreach(var hand in new[]{"LeftHand","RightHand"})
             {
                 var controller=Group(hand,offset);Track(controller.gameObject,$"<XRController>{{{hand}}}/devicePosition",$"<XRController>{{{hand}}}/deviceRotation",$"<XRController>{{{hand}}}/trackingState");
+                if(hand=="LeftHand")leftHand=controller;else rightHand=controller;
                 var model=Group("Model controlador",controller);
                 var shell=Mat("Controller pearl","#DAD9D2",.05f,.3f);var dark=Mat("Controller charcoal","#343A3C");
                 Lathe("Empunyadura",model,new(0,-.035f,0),new[]{new Vector2(.018f,-.07f),new Vector2(.026f,-.01f),new Vector2(.028f,.025f)},shell,20,true,"ControllerGrip");
@@ -105,7 +107,33 @@ namespace Brasa.Editor
                 foreach(var t in model.GetComponentsInChildren<Transform>())GameObjectUtility.SetStaticEditorFlags(t.gameObject,0);
                 var visibility=controller.gameObject.AddComponent<Brasa.TrackedControllerVisual>();visibility.model=model.gameObject;visibility.node=hand=="LeftHand"?UnityEngine.XR.XRNode.LeftHand:UnityEngine.XR.XRNode.RightHand;model.gameObject.SetActive(false);
             }
+            AttachTeleportLocomotion(origin,leftHand,rightHand);
             PrefabUtility.SaveAsPrefabAsset(rig.gameObject,Root+"/Prefabs/Quest3TrackingRig.prefab");
+        }
+        static void AttachTeleportLocomotion(XROrigin origin,Transform leftHand,Transform rightHand)
+        {
+            var teleport=origin.gameObject.GetComponent<Brasa.PointTeleportLocomotion>();
+            if(!teleport)teleport=origin.gameObject.AddComponent<Brasa.PointTeleportLocomotion>();
+            teleport.origin=origin;
+            teleport.leftController=leftHand?leftHand:origin.transform.Find("Camera Offset/LeftHand");
+            teleport.rightController=rightHand?rightHand:origin.transform.Find("Camera Offset/RightHand");
+            teleport.validArcMaterial=AssetDatabase.LoadAssetAtPath<Material>(Root+"/Art/Materials/Mustard shell.mat")??Mat("Mustard shell","#DDA83F",.05f,.32f);
+            teleport.invalidArcMaterial=AssetDatabase.LoadAssetAtPath<Material>(Root+"/Art/Materials/Tomato red.mat")??Mat("Tomato red","#B84E3C",0,.4f);
+            EditorUtility.SetDirty(teleport);
+        }
+        [MenuItem("BRASA/06 · Activar moviment d'apuntar i teletransportar")]
+        public static void InstallTeleportLocomotion()
+        {
+            EditorSceneManager.OpenScene(RestaurantBuilder.ScenePath);
+            var origin=UnityEngine.Object.FindFirstObjectByType<XROrigin>();
+            if(!origin)throw new Exception("No XROrigin found in Restaurant scene");
+            origin.gameObject.name="XR Origin · Quest 3 · teleport";
+            AttachTeleportLocomotion(origin,null,null);
+            PrefabUtility.SaveAsPrefabAsset(origin.gameObject,Root+"/Prefabs/Quest3TrackingRig.prefab");
+            EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene(),RestaurantBuilder.ScenePath);
+            AssetDatabase.SaveAssets();
+            Validate();
+            Debug.Log("BRASA_TELEPORT_OK: Point-and-teleport locomotion installed on XR Origin.");
         }
         static void Track(GameObject go,string position,string rotation,string state)
         {

@@ -54975,8 +54975,9 @@ GameObject:
   m_Component:
   - component: {fileID: 2014287139}
   - component: {fileID: 2014287138}
+  - component: {fileID: 2014287140}
   m_Layer: 0
-  m_Name: "XR Origin \xB7 Quest 3 \xB7 nomes tracking"
+  m_Name: "XR Origin \xB7 Quest 3 \xB7 teleport"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -54999,6 +55000,28 @@ MonoBehaviour:
   m_CameraFloorOffsetObject: {fileID: 101873943}
   m_RequestedTrackingOriginMode: 2
   m_CameraYOffset: 1.65
+--- !u!114 &2014287140
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2014287137}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a84e3d219c6b4f058271e35d9f4120ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Brasa.PointTeleportLocomotion
+  origin: {fileID: 2014287138}
+  leftController: {fileID: 1215028334}
+  rightController: {fileID: 238314846}
+  validArcMaterial: {fileID: 2100000, guid: 0c0aa22421cfb264c8424893be9a4816, type: 2}
+  invalidArcMaterial: {fileID: 2100000, guid: fe75864177dee054db5fd91cf137594f, type: 2}
+  arcSpeed: 6.8
+  arcGravity: 9.81
+  arcSteps: 36
+  arcStepTime: 0.035
+  clearanceRadius: 0.24
 --- !u!4 &2014287139
 Transform:
   m_ObjectHideFlags: 0
