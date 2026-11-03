@@ -336,6 +336,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3432368913965255430}
   - component: {fileID: 9171257682663450433}
+  - component: {fileID: 9171257682663450434}
   m_Layer: 0
   m_Name: Quest3TrackingRig
   m_TagString: Untagged
@@ -376,6 +377,28 @@ MonoBehaviour:
   m_CameraFloorOffsetObject: {fileID: 6984174004819219552}
   m_RequestedTrackingOriginMode: 2
   m_CameraYOffset: 1.65
+--- !u!114 &9171257682663450434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1207597450159138643}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a84e3d219c6b4f058271e35d9f4120ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Brasa.PointTeleportLocomotion
+  origin: {fileID: 9171257682663450433}
+  leftController: {fileID: 3651478791398988536}
+  rightController: {fileID: 1614166399396502061}
+  validArcMaterial: {fileID: 2100000, guid: 0c0aa22421cfb264c8424893be9a4816, type: 2}
+  invalidArcMaterial: {fileID: 2100000, guid: fe75864177dee054db5fd91cf137594f, type: 2}
+  arcSpeed: 6.8
+  arcGravity: 9.81
+  arcSteps: 36
+  arcStepTime: 0.035
+  clearanceRadius: 0.24
 --- !u!1 &1942379869997111028
 GameObject:
   m_ObjectHideFlags: 0
