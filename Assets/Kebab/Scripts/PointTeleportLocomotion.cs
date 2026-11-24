@@ -3,45 +3,51 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using CommonUsages = UnityEngine.XR.CommonUsages;
 using InputDevice = UnityEngine.XR.InputDevice;
 
 namespace Brasa
 {
     /// <summary>
-    /// VR point-and-teleport locomotion for Quest / OpenXR.
-    /// Hold thumbstick forward or index trigger on either controller to aim a parabolic arc onto the restaurant floor;
-    /// release to teleport to the pointed valid floor location.
+    /// Moviment VR d'apuntar i teletransportar-se per a Meta Quest / OpenXR.
+    /// Mantén el joystick cap endavant (o el gallet si no estàs agafant cap objecte) per apuntar a terra;
+    /// en deixar anar sobre un punt vàlid, el jugador es mou fins allà.
     /// </summary>
     public sealed class PointTeleportLocomotion : MonoBehaviour
     {
-        [Header("Rig References")]
+        [Header("Referències del Rig VR")]
         public XROrigin origin;
         public Transform leftController;
         public Transform rightController;
 
-        [Header("Visual Materials")]
+        [Header("Materials visuals de l'arc i la diana")]
         public Material validArcMaterial;
         public Material invalidArcMaterial;
 
-        [Header("Arc & Teleport Settings")]
+        [Header("Configuració de l'arc i col·lisions")]
         public float arcSpeed = 6.8f;
         public float arcGravity = 9.81f;
         public int arcSteps = 36;
         public float arcStepTime = 0.035f;
         public float clearanceRadius = 0.24f;
 
+        [Header("Límits d'escena")]
+        // Actiu a l'escena del restaurant per no entrar al WC/magatzem tancats; desactivat a l'escena Testing.
+        public bool restrictToRestaurantBounds = true;
+
         private LineRenderer arcRenderer;
         private Transform reticleTransform;
-        private MeshRenderer reticleOuterRenderer;
-        private MeshRenderer reticleInnerRenderer;
+
+        private XRBaseInteractor leftInteractor;
+        private XRBaseInteractor rightInteractor;
 
         private InputAction leftTriggerAction;
         private InputAction rightTriggerAction;
         private InputAction leftStickAction;
         private InputAction rightStickAction;
 
-        private int activeHand = -1; // -1 = none, 0 = left, 1 = right
+        private int activeHand = -1; // -1 = cap, 0 = esquerra, 1 = dreta
         private bool hasValidTarget;
         private Vector3 currentTargetPoint;
         private Vector3[] arcPoints;
@@ -85,6 +91,7 @@ namespace Brasa
             rightStickAction?.Dispose();
         }
 
+        // Busca automàticament l'XROrigin, les mans i els interactors XR si no estan assignats.
         private void ResolveReferences()
         {
             if (!origin) origin = GetComponent<XROrigin>();
@@ -92,17 +99,15 @@ namespace Brasa
             if (!origin) return;
 
             if (!leftController)
-            {
-                var t = origin.transform.Find("Camera Offset/LeftHand");
-                if (t) leftController = t;
-            }
+                leftController = origin.transform.Find("Camera Offset/LeftHand");
             if (!rightController)
-            {
-                var t = origin.transform.Find("Camera Offset/RightHand");
-                if (t) rightController = t;
-            }
+                rightController = origin.transform.Find("Camera Offset/RightHand");
+
+            if (leftController) leftInteractor = leftController.GetComponent<XRBaseInteractor>();
+            if (rightController) rightInteractor = rightController.GetComponent<XRBaseInteractor>();
         }
 
+        // Configura les accions d'entrada per llegir el gallet i el joystick de cada comandament.
         private void SetupInputActions()
         {
             leftTriggerAction = new InputAction("LeftTeleportTrigger", InputActionType.Value);
@@ -122,8 +127,11 @@ namespace Brasa
             rightStickAction.AddBinding("<XRController>{RightHand}/primary2DAxis");
         }
 
+        // Crea la línia parabòlica (LineRenderer) i la diana circular que es veu a terra.
         private void CreateVisuals()
         {
+            if (arcRenderer && reticleTransform) return;
+
             Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
             if (!unlitShader) unlitShader = Shader.Find("Sprites/Default");
 
@@ -142,7 +150,7 @@ namespace Brasa
             arcObject.transform.SetParent(transform, false);
             arcRenderer = arcObject.AddComponent<LineRenderer>();
             arcRenderer.useWorldSpace = true;
-            arcRenderer.widthMultiplier = 0.014f;
+            arcRenderer.widthMultiplier = 0.018f;
             arcRenderer.numCapVertices = 4;
             arcRenderer.numCornerVertices = 4;
             arcRenderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -157,25 +165,25 @@ namespace Brasa
 
             var outerDisc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             outerDisc.name = "ReticleOuter";
-            Destroy(outerDisc.GetComponent<Collider>());
+            DestroyImmediate(outerDisc.GetComponent<Collider>());
             outerDisc.transform.SetParent(reticleTransform, false);
             outerDisc.transform.localPosition = new Vector3(0f, 0.006f, 0f);
-            outerDisc.transform.localScale = new Vector3(0.42f, 0.003f, 0.42f);
-            reticleOuterRenderer = outerDisc.GetComponent<MeshRenderer>();
-            reticleOuterRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            reticleOuterRenderer.receiveShadows = false;
-            reticleOuterRenderer.sharedMaterial = validArcMaterial;
+            outerDisc.transform.localScale = new Vector3(0.46f, 0.004f, 0.46f);
+            var outerRenderer = outerDisc.GetComponent<MeshRenderer>();
+            outerRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            outerRenderer.receiveShadows = false;
+            outerRenderer.sharedMaterial = validArcMaterial;
 
             var innerDisc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             innerDisc.name = "ReticleInner";
-            Destroy(innerDisc.GetComponent<Collider>());
+            DestroyImmediate(innerDisc.GetComponent<Collider>());
             innerDisc.transform.SetParent(reticleTransform, false);
-            innerDisc.transform.localPosition = new Vector3(0f, 0.010f, 0f);
-            innerDisc.transform.localScale = new Vector3(0.14f, 0.003f, 0.14f);
-            reticleInnerRenderer = innerDisc.GetComponent<MeshRenderer>();
-            reticleInnerRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            reticleInnerRenderer.receiveShadows = false;
-            reticleInnerRenderer.sharedMaterial = validArcMaterial;
+            innerDisc.transform.localPosition = new Vector3(0f, 0.011f, 0f);
+            innerDisc.transform.localScale = new Vector3(0.16f, 0.004f, 0.16f);
+            var innerRenderer = innerDisc.GetComponent<MeshRenderer>();
+            innerRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            innerRenderer.receiveShadows = false;
+            innerRenderer.sharedMaterial = validArcMaterial;
         }
 
         void Update()
@@ -185,6 +193,7 @@ namespace Brasa
             GetHandInput(0, out bool leftPressed, out bool leftReleased, out bool leftCancelled);
             GetHandInput(1, out bool rightPressed, out bool rightReleased, out bool rightCancelled);
 
+            // Detecta quina mà comença a apuntar per teletransportar-se.
             if (activeHand == -1)
             {
                 if (rightPressed && rightController) activeHand = 1;
@@ -211,6 +220,7 @@ namespace Brasa
 
             UpdateAimArc(handTransform);
 
+            // En deixar anar el botó sobre un punt vàlid, executa el teletransport.
             if (released)
             {
                 if (hasValidTarget)
@@ -223,6 +233,7 @@ namespace Brasa
             }
         }
 
+        // Llegeix joystick i gallet; evita usar el gallet per teletransportar si la mà està agafant un objecte.
         private void GetHandInput(int handIndex, out bool pressed, out bool released, out bool cancelled)
         {
             XRNode node = handIndex == 0 ? XRNode.LeftHand : XRNode.RightHand;
@@ -254,13 +265,24 @@ namespace Brasa
                     stickVal = actStick;
             }
 
+            // Si la mà té un objecte agafat o a prop per agafar, el gallet no dispara el teleport (el joystick sí).
+            XRBaseInteractor handInteractor = handIndex == 0 ? leftInteractor : rightInteractor;
+            if (handInteractor && (handInteractor.hasSelection || handInteractor.hasHover))
+            {
+                triggerVal = 0f;
+            }
+
             cancelled = stickVal.y < -0.55f;
             pressed = !cancelled && (triggerVal > 0.55f || stickVal.y > 0.55f);
             released = !cancelled && (triggerVal < 0.25f && stickVal.y < 0.25f);
         }
 
+        // Calcula l'arc parabòlic punt per punt i comprova si xoca contra terra transitable.
         private void UpdateAimArc(Transform hand)
         {
+            if (arcPoints == null || arcPoints.Length != arcSteps + 1)
+                arcPoints = new Vector3[arcSteps + 1];
+
             Vector3 startPos = hand.position + hand.forward * 0.04f;
             Vector3 velocity = hand.forward * arcSpeed;
             Vector3 gravity = new Vector3(0f, -arcGravity, 0f);
@@ -281,7 +303,7 @@ namespace Brasa
                     if (IsValidTeleportPoint(hit))
                     {
                         hasValidTarget = true;
-                        currentTargetPoint = new Vector3(hit.point.x, 0f, hit.point.z);
+                        currentTargetPoint = new Vector3(hit.point.x, hit.point.y, hit.point.z);
                     }
                     break;
                 }
@@ -311,28 +333,30 @@ namespace Brasa
             }
         }
 
+        // Comprova que el punt on cau l'arc és terra pla i hi cap el jugador sense xocar amb obstacles.
         private bool IsValidTeleportPoint(RaycastHit hit)
         {
-            // Must hit a flat upward-facing floor surface at ground level (y ~= 0)
             if (hit.normal.y < 0.75f) return false;
-            if (Mathf.Abs(hit.point.y) > 0.06f) return false;
+            if (Mathf.Abs(hit.point.y) > 0.08f) return false;
 
-            Vector3 pt = new Vector3(hit.point.x, 0f, hit.point.z);
+            Vector3 pt = new Vector3(hit.point.x, hit.point.y, hit.point.z);
 
-            // Must be within restaurant interior walls
-            if (pt.x < -5.65f || pt.x > 5.65f || pt.z < -4.95f || pt.z > 4.95f)
-                return false;
+            if (restrictToRestaurantBounds)
+            {
+                if (pt.x < -5.65f || pt.x > 5.65f || pt.z < -4.95f || pt.z > 4.95f)
+                    return false;
 
-            // Closed WC and storage rooms in the back-left corner
-            if (pt.x < -0.70f && pt.z > 3.20f)
-                return false;
+                // Evita entrar al WC i magatzem tancats.
+                if (pt.x < -0.70f && pt.z > 3.20f)
+                    return false;
 
-            // Avoid corner decorative plant pots
-            Vector2 pt2D = new Vector2(pt.x, pt.z);
-            if (Vector2.Distance(pt2D, LeftPlantPos) < 0.45f || Vector2.Distance(pt2D, RightPlantPos) < 0.45f)
-                return false;
+                // Evita teletransportar-se dins dels tests de plantes de les cantonades.
+                Vector2 pt2D = new Vector2(pt.x, pt.z);
+                if (Vector2.Distance(pt2D, LeftPlantPos) < 0.45f || Vector2.Distance(pt2D, RightPlantPos) < 0.45f)
+                    return false;
+            }
 
-            // Ensure player body/head capsule does not collide with tables, chairs, counter, or walls
+            // Comprova amb una càpsula vertical que no hi ha parets, taules ni cadires al punt de destí.
             Vector3 capsuleBottom = pt + Vector3.up * (clearanceRadius + 0.08f);
             Vector3 capsuleTop = pt + Vector3.up * 1.65f;
             if (Physics.CheckCapsule(capsuleBottom, capsuleTop, clearanceRadius, ~0, QueryTriggerInteraction.Ignore))
@@ -341,8 +365,12 @@ namespace Brasa
             return true;
         }
 
-        private void TeleportTo(Vector3 targetFloorPoint)
+        // Mou l'XROrigin fins al punt de terra escollit mantenint la posició real del cap.
+        public void TeleportTo(Vector3 targetFloorPoint)
         {
+            if (!origin) ResolveReferences();
+            if (!origin) return;
+
             Vector3 camPos = origin.Camera ? origin.Camera.transform.position : origin.transform.position;
             Vector3 deltaXZ = new Vector3(targetFloorPoint.x - camPos.x, 0f, targetFloorPoint.z - camPos.z);
 
@@ -351,6 +379,27 @@ namespace Brasa
                 targetFloorPoint.y,
                 origin.transform.position.z + deltaXZ.z
             );
+        }
+
+        // Mètode d'ajuda per a l'escena Testing: dibuixa l'arc des d'una mà i retorna si el destí és vàlid.
+        public bool ProvarArcTeleport(Transform hand, bool executarTeleport, out Vector3 targetPoint)
+        {
+            ResolveReferences();
+            CreateVisuals();
+            UpdateAimArc(hand);
+            targetPoint = currentTargetPoint;
+
+            if (executarTeleport && hasValidTarget)
+            {
+                TeleportTo(currentTargetPoint);
+                SetVisualsVisible(false);
+            }
+            return hasValidTarget;
+        }
+
+        public void AmagarVisualsTeleport()
+        {
+            SetVisualsVisible(false);
         }
 
         private void SetVisualsVisible(bool visible)

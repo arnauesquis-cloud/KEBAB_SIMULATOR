@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Kebab/Scenes/Restaurant.unity
     guid: 73ecc573357e6104fb50e19fd6ead468
+  - enabled: 1
+    path: Assets/Kebab/Scenes/Testing.unity
+    guid: 00aad1bd681f5ef438fe7b35cbb965fa
   m_configObjects:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 410af25859efe164d82cdb65783fef50, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: d7174db332b29d649870f76cfb248437, type: 2}

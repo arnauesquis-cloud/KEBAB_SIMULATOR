@@ -1,0 +1,10 @@
+BRASA KEBAB VR · INFORME DE PROVES ESCENA TESTING (SPRINT 2)
+Data: 2026-11-24 19:32
+[PASS] XRInteractionManager present: XR Interaction Manager
+[PASS] XRDirectInteractors (mans): 2 (LeftHand + RightHand, Grip configurat)
+[PASS] Objectes XRGrabInteractable a Testing: 5
+[PASS] Prova Grab (Agafar): RightHand (XRDirectInteractor) soste 'Pa pita · Grab' a y=1,28 m
+[PASS] Prova Drop (Deixar + Fisica): 'Pa pita · Grab' cau i reposa sobre Taula Desti a y=0,92 m (sense travessar)
+[PASS] Prova Teletransport (Arc valid): Desti valid detectat a (2,61, 0,00, 2,32)
+[PASS] Prova Teletransport (Obstacle): Desti contra obstacle bloquejat correctament.
+[PASS] Prova Teletransport (Execucio): XROrigin mogut 5,05 m fins a (2,61, 0,00, 2,32)

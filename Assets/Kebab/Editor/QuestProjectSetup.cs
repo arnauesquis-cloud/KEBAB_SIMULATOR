@@ -21,6 +21,10 @@ using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features;
 using UnityEngine.XR.OpenXR.Features.Interactions;
 using UnityEngine.XR.OpenXR.Features.MetaQuestSupport;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using Unity.XR.CoreUtils;
 using static Brasa.Editor.RestaurantGeometry;
 
@@ -108,7 +112,110 @@ namespace Brasa.Editor
                 var visibility=controller.gameObject.AddComponent<Brasa.TrackedControllerVisual>();visibility.model=model.gameObject;visibility.node=hand=="LeftHand"?UnityEngine.XR.XRNode.LeftHand:UnityEngine.XR.XRNode.RightHand;model.gameObject.SetActive(false);
             }
             AttachTeleportLocomotion(origin,leftHand,rightHand);
+            AttachXRGrabInteractors(origin,leftHand,rightHand);
             PrefabUtility.SaveAsPrefabAsset(rig.gameObject,Root+"/Prefabs/Quest3TrackingRig.prefab");
+        }
+        internal static XRInteractionManager EnsureInteractionManager()
+        {
+            var manager=UnityEngine.Object.FindFirstObjectByType<XRInteractionManager>();
+            if(!manager)
+            {
+                var go=new GameObject("XR Interaction Manager");
+                manager=go.AddComponent<XRInteractionManager>();
+            }
+            return manager;
+        }
+        internal static void AttachXRGrabInteractors(XROrigin origin,Transform leftHand,Transform rightHand)
+        {
+            var manager=EnsureInteractionManager();
+            leftHand=leftHand?leftHand:origin.transform.Find("Camera Offset/LeftHand");
+            rightHand=rightHand?rightHand:origin.transform.Find("Camera Offset/RightHand");
+            ConfigureDirectInteractor(leftHand,"LeftHand",InteractorHandedness.Left,manager);
+            ConfigureDirectInteractor(rightHand,"RightHand",InteractorHandedness.Right,manager);
+        }
+        static void ConfigureDirectInteractor(Transform hand,string handTag,InteractorHandedness handedness,XRInteractionManager manager)
+        {
+            if(!hand)return;
+            var sphere=hand.GetComponent<SphereCollider>();
+            if(!sphere)sphere=hand.gameObject.AddComponent<SphereCollider>();
+            sphere.isTrigger=true;
+            sphere.radius=0.13f;
+            sphere.center=new Vector3(0f,0f,0.02f);
+
+            var interactor=hand.GetComponent<XRDirectInteractor>();
+            if(!interactor)interactor=hand.gameObject.AddComponent<XRDirectInteractor>();
+            interactor.interactionManager=manager;
+            interactor.handedness=handedness;
+            interactor.improveAccuracyWithSphereCollider=true;
+            interactor.physicsLayerMask=~0;
+            interactor.selectActionTrigger=XRBaseInputInteractor.InputTriggerType.StateChange;
+
+            // Configura el botó Grip del comandament Quest 3 per agafar i deixar objectes (Select).
+            var selectPerformed=new InputAction($"{handTag}GrabSelect",InputActionType.Button);
+            selectPerformed.AddBinding($"<XRController>{{{handTag}}}/gripPressed");
+            selectPerformed.AddBinding($"<XRController>{{{handTag}}}/grip",interactions:"press(pressPoint=0.5)");
+            var selectValue=new InputAction($"{handTag}GrabSelectValue",InputActionType.Value,expectedControlType:"Axis");
+            selectValue.AddBinding($"<XRController>{{{handTag}}}/grip");
+            interactor.selectInput.inputSourceMode=XRInputButtonReader.InputSourceMode.InputAction;
+            interactor.selectInput.inputActionPerformed=selectPerformed;
+            interactor.selectInput.inputActionValue=selectValue;
+
+            // Configura el gallet (Trigger) com a acció secundària (Activate).
+            var actPerformed=new InputAction($"{handTag}GrabActivate",InputActionType.Button);
+            actPerformed.AddBinding($"<XRController>{{{handTag}}}/triggerPressed");
+            actPerformed.AddBinding($"<XRController>{{{handTag}}}/trigger",interactions:"press(pressPoint=0.5)");
+            var actValue=new InputAction($"{handTag}GrabActivateValue",InputActionType.Value,expectedControlType:"Axis");
+            actValue.AddBinding($"<XRController>{{{handTag}}}/trigger");
+            interactor.activateInput.inputSourceMode=XRInputButtonReader.InputSourceMode.InputAction;
+            interactor.activateInput.inputActionPerformed=actPerformed;
+            interactor.activateInput.inputActionValue=actValue;
+
+            EditorUtility.SetDirty(sphere);
+            EditorUtility.SetDirty(interactor);
+        }
+        internal static XRGrabInteractable MakeGrabbable(GameObject go,float mass=0.35f)
+        {
+            if(!go)return null;
+            // Treu els flags estàtics perquè l'objecte es pugui moure lliurement quan l'agafem.
+            foreach(var t in go.GetComponentsInChildren<Transform>(true))
+                GameObjectUtility.SetStaticEditorFlags(t.gameObject,0);
+
+            if(!go.GetComponent<Collider>())
+            {
+                var renderers=go.GetComponentsInChildren<MeshRenderer>(true);
+                if(renderers.Length>0)
+                {
+                    Bounds b=renderers[0].bounds;
+                    for(int i=1;i<renderers.Length;i++)b.Encapsulate(renderers[i].bounds);
+                    var col=go.AddComponent<BoxCollider>();
+                    col.center=go.transform.InverseTransformPoint(b.center);
+                    Vector3 worldSize=b.size;
+                    Vector3 lossy=go.transform.lossyScale;
+                    col.size=new Vector3(
+                        Mathf.Max(0.05f,Mathf.Abs(lossy.x)>0.001f?worldSize.x/Mathf.Abs(lossy.x):worldSize.x),
+                        Mathf.Max(0.05f,Mathf.Abs(lossy.y)>0.001f?worldSize.y/Mathf.Abs(lossy.y):worldSize.y),
+                        Mathf.Max(0.05f,Mathf.Abs(lossy.z)>0.001f?worldSize.z/Mathf.Abs(lossy.z):worldSize.z));
+                }
+            }
+
+            var rb=go.GetComponent<Rigidbody>();
+            if(!rb)rb=go.AddComponent<Rigidbody>();
+            rb.mass=mass;
+            rb.useGravity=true;
+            rb.isKinematic=false;
+            rb.collisionDetectionMode=CollisionDetectionMode.ContinuousDynamic;
+            rb.interpolation=RigidbodyInterpolation.Interpolate;
+
+            var grab=go.GetComponent<XRGrabInteractable>();
+            if(!grab)grab=go.AddComponent<XRGrabInteractable>();
+            grab.movementType=XRBaseInteractable.MovementType.VelocityTracking;
+            grab.useDynamicAttach=true;
+            grab.throwOnDetach=true;
+            grab.interactionManager=EnsureInteractionManager();
+
+            EditorUtility.SetDirty(rb);
+            EditorUtility.SetDirty(grab);
+            return grab;
         }
         static void AttachTeleportLocomotion(XROrigin origin,Transform leftHand,Transform rightHand)
         {
@@ -121,19 +228,34 @@ namespace Brasa.Editor
             teleport.invalidArcMaterial=AssetDatabase.LoadAssetAtPath<Material>(Root+"/Art/Materials/Tomato red.mat")??Mat("Tomato red","#B84E3C",0,.4f);
             EditorUtility.SetDirty(teleport);
         }
-        [MenuItem("BRASA/06 · Activar moviment d'apuntar i teletransportar")]
-        public static void InstallTeleportLocomotion()
+        [MenuItem("BRASA/06 · Activar teletransport i Grab VR al restaurant")]
+        public static void InstallTeleportAndGrabInRestaurant()
         {
             EditorSceneManager.OpenScene(RestaurantBuilder.ScenePath);
             var origin=UnityEngine.Object.FindFirstObjectByType<XROrigin>();
             if(!origin)throw new Exception("No XROrigin found in Restaurant scene");
-            origin.gameObject.name="XR Origin · Quest 3 · teleport";
+            origin.gameObject.name="XR Origin · Quest 3 · teleport + grab";
             AttachTeleportLocomotion(origin,null,null);
+            AttachXRGrabInteractors(origin,null,null);
+
+            // Fa agafables amb XRGrabInteractable els objectes reals del taulell i taules del restaurant.
+            int grabbableCount=0;
+            foreach(var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if(t.name=="Ampolla salsa"||t.name=="Pa pita"||t.name=="Safates apilades"||t.name=="Safata")
+                {
+                    if(t.position.y<0.85f&&t.position.y>0.70f)
+                        t.position+=new Vector3(0f,0.018f,0f);
+                    MakeGrabbable(t.gameObject,t.name=="Safates apilades"||t.name=="Safata"?0.45f:0.25f);
+                    grabbableCount++;
+                }
+            }
+
             PrefabUtility.SaveAsPrefabAsset(origin.gameObject,Root+"/Prefabs/Quest3TrackingRig.prefab");
             EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene(),RestaurantBuilder.ScenePath);
             AssetDatabase.SaveAssets();
             Validate();
-            Debug.Log("BRASA_TELEPORT_OK: Point-and-teleport locomotion installed on XR Origin.");
+            Debug.Log($"BRASA_XRI_GRAB_OK: XR Interaction Toolkit Grab + Teleport installed. Grabbables in Restaurant={grabbableCount}");
         }
         static void Track(GameObject go,string position,string rotation,string state)
         {
